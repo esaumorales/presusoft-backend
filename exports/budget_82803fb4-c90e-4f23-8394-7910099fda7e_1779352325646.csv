@@ -1,0 +1,27 @@
+﻿PRESUPUESTO - PRES-0005-JP9X
+Título: Aplicativo Movil
+Descripción: presupuestame esta
+Cliente: Esau
+Moneda: EUR
+
+Modulo;Tipo;Nombre/Descripción;Cantidad;Tarifa/Precio;Total
+Diseño UI/UX Mobile;MODULO;Subtotal Módulo;;;0
+Diseño UI/UX Mobile;Tarea;User Flow y Wireframes;1;35;0
+Diseño UI/UX Mobile;Tarea;Diseño de Pantallas (Figma);1;38;0
+Desarrollo App (React Native);MODULO;Subtotal Módulo;;;0
+Desarrollo App (React Native);Tarea;Estructura y Navegación;1;45;0
+Desarrollo App (React Native);Tarea;Pantallas Principales;1;45;0
+Desarrollo App (React Native);Tarea;Autenticación;1;45;0
+Desarrollo App (React Native);Tarea;Integración con Backend;1;45;0
+Desarrollo App (React Native);Tarea;Notificaciones Push;1;45;0
+Backend API para la App;MODULO;Subtotal Módulo;;;0
+Backend API para la App;Tarea;API REST (Node.js);1;42;0
+QA & Publicación;MODULO;Subtotal Módulo;;;0
+QA & Publicación;Tarea;Testing en Dispositivos Reales;1;35;0
+QA & Publicación;Tarea;Publicación App Stores;1;40;0
+
+Subtotal;;;;;0
+Contingencia (0%);;;;;0
+Margen (0%);;;;;0
+Impuestos (18%);;;;;0
+TOTAL;;;;;0

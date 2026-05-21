@@ -21,6 +21,7 @@ import exportRoutes from "./modules/exports/exports.routes.js";
 import notificationRoutes from "./modules/notifications/notifications.routes.js";
 import planRoutes from "./modules/plans/plans.routes.js";
 import subscriptionRoutes from "./modules/subscriptions/subscriptions.routes.js";
+import aiRoutes from "./modules/ai/ai.routes.js";
 
 import { notFoundMiddleware } from "./middlewares/notFound.middleware.js";
 import { errorMiddleware } from "./middlewares/error.middleware.js";
@@ -65,6 +66,7 @@ app.use("/api/exports", exportRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/plans", planRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
+app.use("/api/ai", aiRoutes);
 
 app.use(notFoundMiddleware);
 app.use(errorMiddleware);

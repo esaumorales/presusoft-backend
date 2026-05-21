@@ -7,8 +7,24 @@ import { convertAmount } from "../../utils/currency.js";
 import { logAction } from "../../utils/auditLogger.js";
 
 export const createBudget = async (userId, user, data) => {
+  let projectId = data.projectId;
+
+  // ── Si no viene projectId, crear un proyecto automáticamente ──
+  if (!projectId) {
+    const newProject = await prisma.project.create({
+      data: {
+        userId,
+        clientId: data.clientId || null,
+        name: data.title || "Proyecto sin nombre",
+        description: data.description || "",
+        status: "active",
+      },
+    });
+    projectId = newProject.id;
+  }
+
   const project = await prisma.project.findUnique({
-    where: { id: data.projectId },
+    where: { id: projectId },
   });
 
   if (!project) {
@@ -25,7 +41,7 @@ export const createBudget = async (userId, user, data) => {
 
   const budget = await prisma.budget.create({
     data: {
-      projectId: data.projectId,
+      projectId,
       userId,
       code,
       title: data.title,
@@ -129,10 +145,11 @@ export const createBudget = async (userId, user, data) => {
   const io = getIO();
   io.to(`user:${userId}`).emit("budget:created", updatedBudget);
 
-  await logAction(userId, project.id, "CREATE_BUDGET", "Budget", budget.id, `Presupuesto creado con código ${budget.code}`);
+  await logAction(userId, projectId, "CREATE_BUDGET", "Budget", budget.id, `Presupuesto creado con código ${budget.code}`);
 
   return updatedBudget;
 };
+
 
 export const getBudgets = async (user, filters = {}) => {
   const where = {};

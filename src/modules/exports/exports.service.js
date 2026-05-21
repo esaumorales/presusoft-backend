@@ -1,6 +1,7 @@
 import prisma from "../../config/prisma.js";
 import fs from "fs";
 import path from "path";
+import puppeteer from "puppeteer";
 
 const EXPORTS_DIR = path.join(process.cwd(), "exports");
 
@@ -77,46 +78,50 @@ const generateHtmlContent = (budget, format) => {
       let itemsHtml = "";
       for (const task of mod.tasks) {
         itemsHtml += `
-          <tr>
-            <td style="padding: 8px; border-bottom: 1px solid #eee;">Tarea: ${task.name}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">${task.quantity}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">${budget.currency} ${task.hourlyRate || task.unitPrice}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">${budget.currency} ${task.total}</td>
+          <tr style="border-bottom: 1px solid #f0f0f0;">
+            <td style="padding: 12px 15px; color: #4b5563;">Tarea: ${task.name}</td>
+            <td style="padding: 12px 15px; text-align: center; color: #6b7280;">${task.quantity}</td>
+            <td style="padding: 12px 15px; text-align: right; color: #4b5563;">${budget.currency} ${task.hourlyRate || task.unitPrice}</td>
+            <td style="padding: 12px 15px; text-align: right; font-weight: 600; color: #111827;">${budget.currency} ${task.total}</td>
           </tr>
         `;
       }
       for (const dep of mod.dependencies) {
         const planName = dep.plan ? `${dep.provider.name} - ${dep.plan.name}` : dep.provider.name;
         itemsHtml += `
-          <tr>
-            <td style="padding: 8px; border-bottom: 1px solid #eee;">Dependencia: ${planName}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">${dep.quantity}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">${budget.currency} ${dep.plan?.price || dep.cost}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">${budget.currency} ${dep.cost}</td>
+          <tr style="border-bottom: 1px solid #f0f0f0;">
+            <td style="padding: 12px 15px; color: #4b5563;">Dependencia: ${planName}</td>
+            <td style="padding: 12px 15px; text-align: center; color: #6b7280;">${dep.quantity}</td>
+            <td style="padding: 12px 15px; text-align: right; color: #4b5563;">${budget.currency} ${dep.plan?.price || dep.cost}</td>
+            <td style="padding: 12px 15px; text-align: right; font-weight: 600; color: #111827;">${budget.currency} ${dep.cost}</td>
           </tr>
         `;
       }
 
       modulesHtml += `
-        <div style="margin-bottom: 25px;">
-          <h3 style="border-bottom: 2px solid #5c6bc0; padding-bottom: 5px; color: #3f51b5; margin-bottom: 10px; font-family: sans-serif;">Módulo: ${mod.name}</h3>
-          <p style="font-size: 0.9rem; color: #555; margin-bottom: 10px; font-family: sans-serif;">${mod.description || ""}</p>
-          <table style="width: 100%; border-collapse: collapse; margin-bottom: 10px; font-family: sans-serif;">
+        <div style="margin-bottom: 30px; background: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); overflow: hidden; border: 1px solid #e5e7eb;">
+          <div style="background: linear-gradient(to right, #4f46e5, #3b82f6); padding: 15px 20px;">
+            <h3 style="margin: 0; color: #ffffff; font-size: 1.25rem; font-weight: 600;">Módulo: ${mod.name}</h3>
+            ${mod.description ? `<p style="margin: 5px 0 0; color: #e0e7ff; font-size: 0.9rem;">${mod.description}</p>` : ''}
+          </div>
+          <table style="width: 100%; border-collapse: collapse; margin: 0;">
             <thead>
-              <tr style="background-color: #f5f5f5; border-bottom: 1px solid #ddd;">
-                <th style="text-align: left; padding: 8px;">Concepto</th>
-                <th style="text-align: right; padding: 8px; width: 10%;">Cant.</th>
-                <th style="text-align: right; padding: 8px; width: 20%;">Precio Unit.</th>
-                <th style="text-align: right; padding: 8px; width: 20%;">Total</th>
+              <tr style="background-color: #f9fafb; border-bottom: 2px solid #e5e7eb;">
+                <th style="text-align: left; padding: 12px 15px; color: #6b7280; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em;">Concepto</th>
+                <th style="text-align: center; padding: 12px 15px; color: #6b7280; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; width: 10%;">Cant.</th>
+                <th style="text-align: right; padding: 12px 15px; color: #6b7280; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; width: 20%;">Precio Unit.</th>
+                <th style="text-align: right; padding: 12px 15px; color: #6b7280; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; width: 20%;">Total</th>
               </tr>
             </thead>
             <tbody>
               ${itemsHtml}
-              <tr style="font-weight: bold; border-top: 1px solid #ddd;">
-                <td colspan="3" style="text-align: right; padding: 8px;">Subtotal Módulo:</td>
-                <td style="text-align: right; padding: 8px;">${budget.currency} ${mod.subtotal}</td>
-              </tr>
             </tbody>
+            <tfoot>
+              <tr style="background-color: #f3f4f6;">
+                <td colspan="3" style="text-align: right; padding: 12px 15px; font-weight: 600; color: #374151;">Subtotal Módulo:</td>
+                <td style="text-align: right; padding: 12px 15px; font-weight: 700; color: #4f46e5; font-size: 1.1rem;">${budget.currency} ${mod.subtotal}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       `;
@@ -126,7 +131,6 @@ const generateHtmlContent = (budget, format) => {
   const clientName = budget.project?.client?.name || "Sin cliente";
   const clientEmail = budget.project?.client?.email || "";
   const clientPhone = budget.project?.client?.phone || "";
-  const clientAddress = budget.project?.client?.address || "";
   
   const creatorName = budget.user?.name || "";
   const creatorEmail = budget.user?.email || "";
@@ -137,154 +141,206 @@ const generateHtmlContent = (budget, format) => {
     <head>
       <meta charset="UTF-8">
       <title>${title}</title>
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
       <style>
         body {
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-          color: #333;
-          line-height: 1.5;
+          font-family: 'Inter', sans-serif;
+          color: #1f2937;
+          line-height: 1.6;
           margin: 0;
-          padding: 30px;
+          padding: 40px;
+          background-color: #f9fafb;
+        }
+        .container {
+          max-width: 800px;
+          margin: 0 auto;
+          background: #ffffff;
+          padding: 40px;
+          border-radius: 16px;
+          box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05), 0 4px 6px -2px rgba(0,0,0,0.025);
         }
         .header {
-          border-bottom: 3px solid #3f51b5;
-          padding-bottom: 15px;
-          margin-bottom: 30px;
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          border-bottom: 2px solid #e5e7eb;
+          padding-bottom: 25px;
+          margin-bottom: 35px;
         }
-        .header-title h1 {
-          margin: 0;
-          color: #3f51b5;
-          font-size: 2.2rem;
+        .brand-title {
+          font-size: 2.5rem;
+          font-weight: 800;
+          background: linear-gradient(to right, #4f46e5, #2563eb);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          margin: 0 0 5px;
         }
-        .header-details {
-          margin-top: 10px;
+        .budget-code {
+          display: inline-block;
+          background: #e0e7ff;
+          color: #4f46e5;
+          padding: 4px 12px;
+          border-radius: 9999px;
+          font-size: 0.85rem;
+          font-weight: 600;
+          letter-spacing: 0.05em;
+        }
+        .header-meta {
+          text-align: right;
           font-size: 0.9rem;
-          color: #666;
+          color: #6b7280;
         }
-        .section-info {
-          margin-bottom: 30px;
+        .header-meta p { margin: 3px 0; }
+        .meta-val { font-weight: 600; color: #111827; }
+        
+        .parties-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 30px;
+          margin-bottom: 40px;
         }
-        .info-card {
-          margin-bottom: 15px;
-          background: #fdfdfd;
-          border: 1px solid #e0e0e0;
-          border-radius: 6px;
-          padding: 15px;
+        .party-card {
+          padding: 20px;
+          background: #f8fafc;
+          border-radius: 12px;
+          border: 1px solid #e2e8f0;
         }
-        .info-card h2 {
-          margin-top: 0;
-          font-size: 1.1rem;
-          color: #3f51b5;
-          border-bottom: 1px solid #eee;
-          padding-bottom: 5px;
+        .party-title {
+          font-size: 0.85rem;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: #64748b;
+          margin: 0 0 10px;
+          font-weight: 700;
         }
-        .info-card p {
-          margin: 5px 0;
-          font-size: 0.9rem;
+        .party-name { font-size: 1.25rem; font-weight: 700; color: #0f172a; margin: 0 0 5px; }
+        .party-detail { margin: 2px 0; color: #475569; font-size: 0.9rem; }
+        
+        .project-overview {
+          margin-bottom: 40px;
+        }
+        .project-title { font-size: 1.8rem; font-weight: 700; color: #111827; margin: 0 0 10px; }
+        .project-desc { color: #4b5563; font-size: 1rem; }
+        
+        .totals-section {
+          display: flex;
+          justify-content: flex-end;
+          margin-top: 40px;
         }
         .totals-table {
-          width: 40%;
-          margin-left: auto;
-          margin-top: 20px;
+          width: 350px;
           border-collapse: collapse;
-          font-family: sans-serif;
         }
-        .totals-table td {
-          padding: 6px 10px;
-          border: none;
+        .totals-table td { padding: 10px 15px; font-size: 0.95rem; color: #4b5563; }
+        .totals-table .amount { text-align: right; font-weight: 600; color: #111827; }
+        .totals-table .total-row td {
+          font-size: 1.25rem;
+          font-weight: 800;
+          color: #4f46e5;
+          border-top: 2px solid #e5e7eb;
+          padding-top: 15px;
         }
-        .totals-table tr.total-row {
-          font-weight: bold;
-          font-size: 1.1rem;
-          color: #3f51b5;
-          border-top: 2px solid #3f51b5;
+        
+        .terms-box {
+          margin-top: 40px;
+          padding: 20px;
+          background: #fffbeb;
+          border-left: 4px solid #f59e0b;
+          border-radius: 0 8px 8px 0;
         }
+        .terms-title { font-weight: 700; color: #b45309; margin: 0 0 8px; font-size: 1rem; }
+        .terms-text { color: #92400e; margin: 0; font-size: 0.9rem; }
+        
         .footer {
           margin-top: 50px;
-          border-top: 1px solid #eee;
-          padding-top: 15px;
-          font-size: 0.8rem;
-          color: #888;
           text-align: center;
+          padding-top: 20px;
+          border-top: 1px solid #e5e7eb;
+          color: #9ca3af;
+          font-size: 0.85rem;
         }
       </style>
     </head>
     <body>
-      <div class="header">
-        <div class="header-title">
-          <h1>PRESUPUESTO</h1>
-          <p style="font-weight: bold; color: #5c6bc0; margin: 5px 0;">Código: ${budget.code}</p>
+      <div class="container">
+        <div class="header">
+          <div>
+            <h1 class="brand-title">PRESUPUESTO</h1>
+            <span class="budget-code">Ref: ${budget.code}</span>
+          </div>
+          <div class="header-meta">
+            <p>Fecha Emisión: <span class="meta-val">${new Date(budget.createdAt).toLocaleDateString()}</span></p>
+            <p>Validez: <span class="meta-val">${budget.validityDays} días</span></p>
+            <p>Estado: <span class="meta-val">${budget.status.toUpperCase()}</span></p>
+          </div>
         </div>
-        <div class="header-details">
-          <p style="margin: 3px 0;"><strong>Fecha Emisión:</strong> ${new Date(budget.createdAt).toLocaleDateString()}</p>
-          <p style="margin: 3px 0;"><strong>Validez:</strong> ${budget.validityDays} días</p>
-          <p style="margin: 3px 0;"><strong>Estado:</strong> ${budget.status.toUpperCase()}</p>
+
+        <div class="parties-grid">
+          <div class="party-card">
+            <h3 class="party-title">Preparado para</h3>
+            <p class="party-name">${clientName}</p>
+            ${clientEmail ? `<p class="party-detail">${clientEmail}</p>` : ""}
+            ${clientPhone ? `<p class="party-detail">${clientPhone}</p>` : ""}
+          </div>
+          <div class="party-card">
+            <h3 class="party-title">Preparado por</h3>
+            <p class="party-name">${creatorName}</p>
+            <p class="party-detail">${creatorEmail}</p>
+          </div>
         </div>
-      </div>
 
-      <div class="section-info">
-        <div class="info-card">
-          <h2>Cliente</h2>
-          <p><strong>Nombre:</strong> ${clientName}</p>
-          ${clientEmail ? `<p><strong>Email:</strong> ${clientEmail}</p>` : ""}
-          ${clientPhone ? `<p><strong>Teléfono:</strong> ${clientPhone}</p>` : ""}
-          ${clientAddress ? `<p><strong>Dirección:</strong> ${clientAddress}</p>` : ""}
+        <div class="project-overview">
+          <h2 class="project-title">${budget.title}</h2>
+          <p class="project-desc">${budget.description || ""}</p>
         </div>
-        <div class="info-card">
-          <h2>Detalles del Proyecto</h2>
-          <p><strong>Proyecto:</strong> ${budget.project?.name || "N/A"}</p>
-          <p><strong>Preparado por:</strong> ${creatorName} (${creatorEmail})</p>
+
+        ${modulesHtml}
+
+        <div class="totals-section">
+          <table class="totals-table">
+            <tr>
+              <td>Subtotal</td>
+              <td class="amount">${budget.currency} ${budget.subtotal}</td>
+            </tr>
+            <tr>
+              <td>Contingencia (${budget.contingencyPercentage}%)</td>
+              <td class="amount">${budget.currency} ${budget.contingencyAmount}</td>
+            </tr>
+            <tr>
+              <td>Margen (${budget.marginPercentage}%)</td>
+              <td class="amount">${budget.currency} ${budget.marginAmount}</td>
+            </tr>
+            <tr>
+              <td>Impuestos (${budget.taxPercentage}%)</td>
+              <td class="amount">${budget.currency} ${budget.taxAmount}</td>
+            </tr>
+            ${parseFloat(budget.discountAmount) > 0 ? `
+            <tr>
+              <td>Descuento (${budget.discountPercentage}%)</td>
+              <td class="amount" style="color: #ef4444;">-${budget.currency} ${budget.discountAmount}</td>
+            </tr>` : ""}
+            <tr class="total-row">
+              <td>TOTAL FINAL</td>
+              <td class="amount" style="color: #4f46e5;">${budget.currency} ${budget.total}</td>
+            </tr>
+          </table>
         </div>
-      </div>
 
-      <div style="margin-bottom: 30px;">
-        <h2 style="font-size: 1.3rem; color: #333; margin-bottom: 10px; font-family: sans-serif;">${budget.title}</h2>
-        <p style="font-size: 0.95rem; color: #555; white-space: pre-line; font-family: sans-serif;">${budget.description || "Sin descripción."}</p>
-      </div>
+        ${budget.paymentTerms ? `
+        <div class="terms-box">
+          <h4 class="terms-title">Términos de Pago</h4>
+          <p class="terms-text">${budget.paymentTerms.replace(/\n/g, '<br>')}</p>
+        </div>` : ""}
 
-      ${modulesHtml}
+        ${budget.notes ? `
+        <div class="terms-box" style="background: #f3f4f6; border-left-color: #6b7280; margin-top: 20px;">
+          <h4 class="terms-title" style="color: #374151;">Notas Adicionales</h4>
+          <p class="terms-text" style="color: #4b5563;">${budget.notes.replace(/\n/g, '<br>')}</p>
+        </div>` : ""}
 
-      <table class="totals-table">
-        <tr>
-          <td style="padding: 6px 10px;">Subtotal:</td>
-          <td style="text-align: right; padding: 6px 10px;">${budget.currency} ${budget.subtotal}</td>
-        </tr>
-        <tr>
-          <td style="padding: 6px 10px;">Contingencia (${budget.contingencyPercentage}%):</td>
-          <td style="text-align: right; padding: 6px 10px;">${budget.currency} ${budget.contingencyAmount}</td>
-        </tr>
-        <tr>
-          <td style="padding: 6px 10px;">Margen (${budget.marginPercentage}%):</td>
-          <td style="text-align: right; padding: 6px 10px;">${budget.currency} ${budget.marginAmount}</td>
-        </tr>
-        <tr>
-          <td style="padding: 6px 10px;">Impuestos (${budget.taxPercentage}%):</td>
-          <td style="text-align: right; padding: 6px 10px;">${budget.currency} ${budget.taxAmount}</td>
-        </tr>
-        ${parseFloat(budget.discountAmount) > 0 ? `
-        <tr>
-          <td style="padding: 6px 10px;">Descuento (${budget.discountPercentage}%):</td>
-          <td style="text-align: right; padding: 6px 10px; color: red;">-${budget.currency} ${budget.discountAmount}</td>
-        </tr>` : ""}
-        <tr class="total-row">
-          <td style="padding: 6px 10px; border-top: 2px solid #3f51b5;">TOTAL:</td>
-          <td style="text-align: right; padding: 6px 10px; border-top: 2px solid #3f51b5;">${budget.currency} ${budget.total}</td>
-        </tr>
-      </table>
-
-      ${budget.paymentTerms ? `
-      <div style="margin-top: 30px; background: #fafafa; padding: 15px; border-radius: 6px; border: 1px solid #eee;">
-        <h4 style="margin-top: 0; color: #333; border-bottom: 1px solid #ddd; padding-bottom: 3px; font-family: sans-serif;">Términos de Pago</h4>
-        <p style="font-size: 0.85rem; color: #555; white-space: pre-line; margin: 5px 0; font-family: sans-serif;">${budget.paymentTerms}</p>
-      </div>` : ""}
-
-      ${budget.notes ? `
-      <div style="margin-top: 20px; background: #fafafa; padding: 15px; border-radius: 6px; border: 1px solid #eee;">
-        <h4 style="margin-top: 0; color: #333; border-bottom: 1px solid #ddd; padding-bottom: 3px; font-family: sans-serif;">Notas adicionales</h4>
-        <p style="font-size: 0.85rem; color: #555; white-space: pre-line; margin: 5px 0; font-family: sans-serif;">${budget.notes}</p>
-      </div>` : ""}
-
-      <div class="footer" style="margin-top: 50px; border-top: 1px solid #eee; padding-top: 15px; font-size: 0.8rem; color: #888; text-align: center; font-family: sans-serif;">
-        <p>Este documento fue generado automáticamente por PresuSoft.</p>
+        <div class="footer">
+          <p>Documento generado con PresuSoft - La plataforma para agencias y freelancers.</p>
+        </div>
       </div>
     </body>
     </html>
@@ -313,22 +369,39 @@ export const exportBudget = async (userId, budgetId, format) => {
 
   let extension = "html";
   let content = "";
+  let fileBuffer = null;
 
   if (format === "excel") {
     extension = "csv";
     content = generateExcelContent(budget);
+    fileBuffer = Buffer.from(content, "utf8");
   } else if (format === "word") {
     extension = "doc";
     content = generateHtmlContent(budget, "word");
+    fileBuffer = Buffer.from(content, "utf8");
   } else {
-    extension = "html";
+    extension = "pdf";
     content = generateHtmlContent(budget, "pdf");
+    
+    // Generar PDF usando puppeteer
+    const browser = await puppeteer.launch({ 
+      headless: "new", 
+      args: ['--no-sandbox', '--disable-setuid-sandbox'] 
+    });
+    const page = await browser.newPage();
+    await page.setContent(content, { waitUntil: 'networkidle0' });
+    fileBuffer = await page.pdf({ 
+      format: 'A4', 
+      printBackground: true,
+      margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' }
+    });
+    await browser.close();
   }
 
   const fileName = `budget_${budgetId}_${Date.now()}.${extension}`;
   const filePath = path.join(EXPORTS_DIR, fileName);
 
-  fs.writeFileSync(filePath, content, "utf8");
+  fs.writeFileSync(filePath, fileBuffer);
 
   const fileUrl = `/api/exports/download/${fileName}`;
 
