@@ -63,28 +63,29 @@ export const updateTask = async (user, id, data) => {
   const task = await getTaskById(user, id);
   checkProjectAccess(task.module.project, user, "write");
 
-  const hours = data.hours !== undefined ? data.hours : task.hours;
-  const hourlyRate = data.hourlyRate !== undefined ? data.hourlyRate : task.hourlyRate;
-  const quantity = data.quantity !== undefined ? data.quantity : task.quantity;
-  const unitPrice = data.unitPrice !== undefined ? data.unitPrice : task.unitPrice;
+  // Asegurar que ningún campo Decimal sea null (Prisma no acepta null en Decimal @default(0))
+  const toNum = (val, fallback = 0) => {
+    const n = parseFloat(val);
+    return isNaN(n) ? fallback : n;
+  };
 
-  const taskTotal = calculateTaskTotal({
-    hours,
-    hourlyRate,
-    quantity,
-    unitPrice,
-  });
+  const hours      = data.hours      !== undefined ? toNum(data.hours)      : toNum(task.hours);
+  const hourlyRate = data.hourlyRate  !== undefined ? toNum(data.hourlyRate)  : toNum(task.hourlyRate);
+  const quantity   = data.quantity    !== undefined ? toNum(data.quantity, 1) : toNum(task.quantity, 1);
+  const unitPrice  = data.unitPrice   !== undefined ? toNum(data.unitPrice)   : toNum(task.unitPrice);
+
+  const taskTotal = calculateTaskTotal({ hours, hourlyRate, quantity, unitPrice });
 
   const updatedTask = await prisma.task.update({
     where: { id },
     data: {
-      name: data.name !== undefined ? data.name : task.name,
+      name:        data.name        !== undefined ? data.name        : task.name,
       description: data.description !== undefined ? data.description : task.description,
       hours,
       hourlyRate,
       quantity,
       unitPrice,
-      total: taskTotal,
+      total:       taskTotal,
       orderNumber: data.orderNumber !== undefined ? data.orderNumber : task.orderNumber,
     },
   });
@@ -95,6 +96,7 @@ export const updateTask = async (user, id, data) => {
 
   return updatedTask;
 };
+
 
 export const deleteTask = async (user, id) => {
   const task = await getTaskById(user, id);

@@ -2,14 +2,14 @@ import { generateHeuristicBudget } from "./ai.service.js";
 
 export const generateBudgetModel = async (req, res, next) => {
   try {
-    const { prompt, budgetId } = req.body;
+    const { prompt, budgetId, market, seniority } = req.body;
     
     if (!prompt) {
       return res.status(400).json({ success: false, message: "El prompt es requerido" });
     }
 
-    // Call the heuristic service
-    const generatedData = await generateHeuristicBudget(prompt, budgetId);
+    // Call the heuristic service with market + seniority
+    const generatedData = await generateHeuristicBudget(prompt, budgetId, market || 'peru', seniority || 'mid');
 
     res.json({
       success: true,
