@@ -1,0 +1,16 @@
+﻿PRESUPUESTO - PRES-0003-6OVK
+Título: Main Project Proposal
+Descripción: Detailed breakdown of the core project structure
+Cliente: E2E Test Client
+Moneda: PEN
+
+Modulo;Tipo;Nombre/Descripción;Cantidad;Tarifa/Precio;Total
+Core Module;MODULO;Subtotal Módulo;;;1205.17
+Core Module;Tarea;Initial Development Task;1;50;1000
+Core Module;Dependencia;Resend - Pro;3;20;60
+
+Subtotal;;;;;1205.17
+Contingencia (10%);;;;;120.52
+Margen (15%);;;;;180.78
+Impuestos (18%);;;;;271.16
+TOTAL;;;;;1777.63

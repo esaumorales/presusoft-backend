@@ -34,3 +34,11 @@ export const deleteTemplate = async (req, res, next) => {
     res.json({ message: "Plantilla eliminada" });
   } catch (error) { next(error); }
 };
+
+export const applyTemplate = async (req, res, next) => {
+  try {
+    const { id, budgetId } = req.params;
+    const updatedBudget = await templatesService.applyTemplate(req.user, id, budgetId);
+    res.json({ message: "Plantilla aplicada correctamente", data: updatedBudget });
+  } catch (error) { next(error); }
+};

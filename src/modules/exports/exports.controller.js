@@ -1,4 +1,6 @@
 import * as exportsService from "./exports.service.js";
+import path from "path";
+import fs from "fs";
 
 export const exportBudgetPdf = async (req, res, next) => {
   try {
@@ -27,3 +29,21 @@ export const getExports = async (req, res, next) => {
     res.json({ message: "Historial de exportaciones", data: exports });
   } catch (error) { next(error); }
 };
+
+export const downloadExportFile = async (req, res, next) => {
+  try {
+    const { filename } = req.params;
+    const filePath = path.join(process.cwd(), "exports", filename);
+
+    if (!fs.existsSync(filePath)) {
+      const error = new Error("Archivo no encontrado");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    res.download(filePath, filename);
+  } catch (error) {
+    next(error);
+  }
+};
+
