@@ -1,0 +1,45 @@
+{
+  "name": "presusoft-backend",
+  "version": "1.0.0",
+  "description": "Backend API REST para PresuSoft",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio",
+    "prisma:seed": "node prisma/seed.js"
+  },
+  "keywords": [
+    "presusoft",
+    "backend",
+    "node",
+    "express",
+    "prisma",
+    "postgresql",
+    "docker",
+    "swagger",
+    "socket.io"
+  ],
+  "author": "PresuSoft",
+  "license": "ISC",
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "bcrypt": "latest",
+    "cors": "latest",
+    "dotenv": "latest",
+    "express": "latest",
+    "jsonwebtoken": "latest",
+    "morgan": "latest",
+    "socket.io": "latest",
+    "swagger-jsdoc": "latest",
+    "swagger-ui-express": "latest"
+  },
+  "devDependencies": {
+    "nodemon": "latest",
+    "prisma": "^5.22.0"
+  }
+}

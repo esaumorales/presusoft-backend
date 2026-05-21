@@ -1,0 +1,345 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  editor
+  viewer
+}
+
+enum UserStatus {
+  active
+  inactive
+}
+
+enum BudgetStatus {
+  draft
+  sent
+  accepted
+  rejected
+  expired
+}
+
+enum CostType {
+  monthly
+  annual
+  one_time
+}
+
+enum ExportFormat {
+  pdf
+  word
+  excel
+}
+
+enum BillingCycle {
+  monthly
+  annual
+}
+
+enum SubscriptionStatus {
+  active
+  inactive
+  canceled
+  expired
+}
+
+enum NotificationType {
+  budget_created
+  budget_updated
+  budget_accepted
+  budget_rejected
+  budget_expired
+  export_completed
+  client_created
+  version_created
+  system
+}
+
+model User {
+  id        String     @id @default(uuid())
+  name      String
+  email     String     @unique
+  password  String
+  phone     String?
+  role      UserRole   @default(editor)
+  status    UserStatus @default(active)
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  companies     Company[]
+  clients       Client[]
+  budgets       Budget[]
+  templates     Template[]
+  versions      BudgetVersion[] @relation("BudgetVersionCreatedBy")
+  exports       BudgetExport[]  @relation("BudgetExportedBy")
+  notifications Notification[]
+  subscriptions Subscription[]
+
+  @@map("users")
+}
+
+model Company {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  name          String
+  ruc           String?
+  address       String?
+  phone         String?
+  email         String?
+  logoUrl       String?  @map("logo_url")
+  currency      String   @default("PEN")
+  taxPercentage Decimal  @default(18.00) @map("tax_percentage")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clients Client[]
+
+  @@map("companies")
+}
+
+model Client {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  companyId      String?  @map("company_id")
+  name           String
+  businessName   String?  @map("business_name")
+  email          String?
+  phone          String?
+  address        String?
+  documentNumber String?  @map("document_number")
+  notes          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  budgets Budget[]
+
+  @@map("clients")
+}
+
+model Budget {
+  id                 String       @id @default(uuid())
+  userId             String       @map("user_id")
+  clientId           String?      @map("client_id")
+  templateId         String?      @map("template_id")
+  code               String       @unique
+  title              String
+  description        String?
+  status             BudgetStatus @default(draft)
+  currency           String       @default("PEN")
+  subtotal           Decimal      @default(0)
+  taxPercentage      Decimal      @default(18.00) @map("tax_percentage")
+  taxAmount          Decimal      @default(0) @map("tax_amount")
+  discountPercentage Decimal      @default(0) @map("discount_percentage")
+  discountAmount     Decimal      @default(0) @map("discount_amount")
+  total              Decimal      @default(0)
+  validityDays       Int          @default(15) @map("validity_days")
+  paymentTerms       String?      @map("payment_terms")
+  notes              String?
+  clientNotes        String?      @map("client_notes")
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client    Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  template  Template? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  modules       BudgetModule[]
+  tasks         BudgetTask[]
+  costs         BudgetCost[]
+  versions      BudgetVersion[]
+  exports       BudgetExport[]
+  notifications Notification[]
+
+  @@map("budgets")
+}
+
+model BudgetModule {
+  id          String   @id @default(uuid())
+  budgetId    String   @map("budget_id")
+  name        String
+  description String?
+  orderNumber Int      @default(1) @map("order_number")
+  subtotal    Decimal  @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  budget Budget       @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  tasks  BudgetTask[]
+
+  @@map("budget_modules")
+}
+
+model BudgetTask {
+  id          String   @id @default(uuid())
+  budgetId    String   @map("budget_id")
+  moduleId    String   @map("module_id")
+  name        String
+  description String?
+  hours       Decimal  @default(0)
+  hourlyRate  Decimal  @default(0) @map("hourly_rate")
+  quantity    Decimal  @default(1)
+  unitPrice   Decimal  @default(0) @map("unit_price")
+  total       Decimal  @default(0)
+  orderNumber Int      @default(1) @map("order_number")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  budget Budget       @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  module BudgetModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@map("budget_tasks")
+}
+
+model BudgetCost {
+  id          String   @id @default(uuid())
+  budgetId    String   @map("budget_id")
+  name        String
+  type        CostType
+  amount      Decimal  @default(0)
+  quantity    Int      @default(1)
+  total       Decimal  @default(0)
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  budget Budget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  @@map("budget_costs")
+}
+
+model Template {
+  id          String   @id @default(uuid())
+  userId      String?  @map("user_id")
+  name        String
+  category    String?
+  description String?
+  isDefault   Boolean  @default(false) @map("is_default")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user    User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  modules TemplateModule[]
+  budgets Budget[]
+
+  @@map("templates")
+}
+
+model TemplateModule {
+  id          String   @id @default(uuid())
+  templateId  String   @map("template_id")
+  name        String
+  description String?
+  orderNumber Int      @default(1) @map("order_number")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  template Template       @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  tasks    TemplateTask[]
+
+  @@map("template_modules")
+}
+
+model TemplateTask {
+  id               String   @id @default(uuid())
+  templateModuleId String   @map("template_module_id")
+  name             String
+  description      String?
+  estimatedHours   Decimal  @default(0) @map("estimated_hours")
+  defaultRate      Decimal  @default(0) @map("default_rate")
+  orderNumber      Int      @default(1) @map("order_number")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  templateModule TemplateModule @relation(fields: [templateModuleId], references: [id], onDelete: Cascade)
+
+  @@map("template_tasks")
+}
+
+model BudgetVersion {
+  id            String   @id @default(uuid())
+  budgetId      String   @map("budget_id")
+  versionNumber Int      @map("version_number")
+  snapshotData  Json     @map("snapshot_data")
+  createdById   String   @map("created_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  budget    Budget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  createdBy User   @relation("BudgetVersionCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@map("budget_versions")
+}
+
+model BudgetExport {
+  id           String       @id @default(uuid())
+  budgetId     String       @map("budget_id")
+  format       ExportFormat
+  fileUrl      String?      @map("file_url")
+  exportedById String       @map("exported_by")
+  exportedAt   DateTime     @default(now()) @map("exported_at")
+
+  budget     Budget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  exportedBy User   @relation("BudgetExportedBy", fields: [exportedById], references: [id], onDelete: Cascade)
+
+  @@map("budget_exports")
+}
+
+model Plan {
+  id           String       @id @default(uuid())
+  name         String       @unique
+  price        Decimal      @default(0)
+  billingCycle BillingCycle @default(monthly) @map("billing_cycle")
+  maxBudgets   Int          @default(5) @map("max_budgets")
+  maxClients   Int          @default(10) @map("max_clients")
+  hasAi        Boolean      @default(false) @map("has_ai")
+  hasExports   Boolean      @default(false) @map("has_exports")
+  hasTeam      Boolean      @default(false) @map("has_team")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id              String             @id @default(uuid())
+  userId          String             @map("user_id")
+  planId          String             @map("plan_id")
+  status          SubscriptionStatus @default(active)
+  startDate       DateTime           @default(now()) @map("start_date")
+  endDate         DateTime?          @map("end_date")
+  paymentProvider String?            @map("payment_provider")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@map("subscriptions")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  budgetId  String?          @map("budget_id")
+  title     String
+  message   String
+  type      NotificationType @default(system)
+  isRead    Boolean          @default(false) @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  budget Budget? @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}

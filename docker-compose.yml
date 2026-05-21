@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: presusoft_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: presusoft_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - presusoft_pgdata:/var/lib/postgresql/data
+    networks:
+      - presusoft_network
+
+  backend:
+    build: .
+    container_name: presusoft_backend
+    restart: always
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: 4000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/presusoft_db?schema=public
+      JWT_SECRET: presusoft_super_secret_key
+      JWT_EXPIRES_IN: 1d
+      NODE_ENV: development
+      CORS_ORIGIN: "*"
+    depends_on:
+      - postgres
+    volumes:
+      - .:/app
+      - /app/node_modules
+    networks:
+      - presusoft_network
+    command: sh -c "npx prisma migrate deploy && npm run dev"
+
+volumes:
+  presusoft_pgdata:
+
+networks:
+  presusoft_network:
+    driver: bridge
