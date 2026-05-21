@@ -582,27 +582,129 @@ const FINANCIAL_ADJUSTMENTS = {
   [PROJECT_TYPES.ELEARNING]: { contingency: 10, margin: 20 },
   [PROJECT_TYPES.BOOKING]:   { contingency: 10, margin: 18 },
 };
+// ─────────────────────────────────────────────────────────────────────────────
+// ALCANCE DEL EQUIPO (TEAM SCOPE)
+// ─────────────────────────────────────────────────────────────────────────────
+const SCOPE_LABELS = {
+  full:     'Equipo Completo (Fullstack)',
+  frontend: 'Solo Frontend y Diseño',
+  backend:  'Solo Backend e Infraestructura',
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FUNCIÓN PRINCIPAL: GENERAR PRESUPUESTO
 // ─────────────────────────────────────────────────────────────────────────────
-export const generateHeuristicBudget = async (prompt, budgetId, market = 'peru', seniority = 'mid') => {
+export const generateHeuristicBudget = async (prompt, budgetId, market = 'peru', scope = 'full', team = {}) => {
   // 1. Clasificar el tipo de proyecto con el modelo local
   const { type, confidence } = classifyProject(prompt);
 
-  // 2. Multiplicador de mercado + seniority
-  const marketMult   = MARKET_MULTIPLIERS[market]   || 1.00;
-  const seniorityMult = SENIORITY_MULTIPLIERS[seniority] || 1.00;
-  const rateMult = parseFloat((marketMult * seniorityMult).toFixed(4));
+  // 2. Multiplicadores de mercado y equipo
+  const marketMult = MARKET_MULTIPLIERS[market] || 1.00;
+  
+  const teamLevels = {
+    ui: team.ui || 'mid',
+    front: team.front || 'mid',
+    back: team.back || 'mid',
+    db: team.db || 'mid',
+    infra: team.infra || 'mid'
+  };
 
-  // 3. Aplicar multiplicador a todos los hourlyRate de las plantillas
-  const rawModules = MODULE_TEMPLATES[type] || MODULE_TEMPLATES[PROJECT_TYPES.WEB];
+  // 3. Obtener plantillas
+  let rawModules = MODULE_TEMPLATES[type] || MODULE_TEMPLATES[PROJECT_TYPES.WEB];
+
+  // 4. Filtrar módulos según el alcance seleccionado
+  if (scope === 'frontend') {
+    rawModules = rawModules.filter(m => /(diseño|ui|ux|frontend|móvil|mobile|app|cliente)/i.test(m.name));
+  } else if (scope === 'backend') {
+    rawModules = rawModules.filter(m => /(backend|api|datos|infraestructura|despliegue|servidor|devops|nube)/i.test(m.name));
+  }
+
+  // 4.5. Añadir módulos fijos de Servicios Externos y Soporte según alcance
+  const isWebOrApp = type === PROJECT_TYPES.WEB || type === PROJECT_TYPES.ECOMMERCE || type === PROJECT_TYPES.SAAS || type === PROJECT_TYPES.MOBILE;
+  if (isWebOrApp) {
+    const externalServicesTasks = [];
+    const supportTasks = [];
+
+    if (scope === 'full' || scope === 'frontend') {
+      externalServicesTasks.push({ name: "Hosting Frontend (Vercel / Netlify) - Anual", description: "Despliegue CDN global, ancho de banda y SSL", hours: 0, hourlyRate: 0, quantity: 12, unitPrice: 20 });
+      supportTasks.push({ name: "Soporte y Mantenimiento Frontend - Mensual", description: "Resolución de bugs, actualizaciones de dependencias de UI y React", hours: 10, hourlyRate: 35 });
+    }
+
+    if (scope === 'full' || scope === 'backend') {
+      externalServicesTasks.push({ name: "Servidor / VPS Backend (AWS / DigitalOcean) - Anual", description: "Instancia de cómputo para la API REST/GraphQL", hours: 0, hourlyRate: 0, quantity: 12, unitPrice: 40 });
+      externalServicesTasks.push({ name: "Base de Datos Gestionada (RDS / Supabase) - Anual", description: "Hosting de base de datos con backups automáticos", hours: 0, hourlyRate: 0, quantity: 12, unitPrice: 35 });
+      externalServicesTasks.push({ name: "Almacenamiento de Archivos (Cloudinary / S3) - Anual", description: "Gestión y optimización de imágenes y documentos", hours: 0, hourlyRate: 0, quantity: 12, unitPrice: 25 });
+      supportTasks.push({ name: "Soporte y Monitoreo Backend - Mensual", description: "Gestión de servidores, uptime, parches de seguridad y monitoreo de logs", hours: 15, hourlyRate: 45 });
+    }
+
+    if (externalServicesTasks.length > 0) {
+      rawModules.push({
+        name: "Licencias y Servicios Cloud (1er Año)",
+        description: "Costos de infraestructura, dominios y servicios externos",
+        tasks: externalServicesTasks
+      });
+    }
+
+    if (supportTasks.length > 0) {
+      rawModules.push({
+        name: "Soporte, Mantenimiento y Garantía (Mensual opcional)",
+        description: "Bolsa de horas para asegurar el correcto funcionamiento post-lanzamiento",
+        tasks: supportTasks
+      });
+    }
+  }
+
+  // 5. Aplicar multiplicador dinámico y ajustar "Role" en el meta
+  
+  // Helpers para identificar categoría de la tarea
+  const isUI = (str) => /(diseñ|ui|ux|figma|wireframe|prototipo|visual)/i.test(str);
+  const isFront = (str) => /(front|móvil|mobile|app|cliente|maquetación|react|vista)/i.test(str);
+  const isDB = (str) => /(base de datos|datos|db|sql|modelo|prisma|mongo)/i.test(str);
+  const isInfra = (str) => /(infra|devops|despliegue|nube|hosting|ssl|cdn|servidor|aws|vercel)/i.test(str);
+  const isBack = (str) => /(back|api|lógica|controlador|ruta|auth)/i.test(str);
+
+  const getCategory = (role, taskName, modName) => {
+    const fullText = `${role} ${taskName} ${modName}`;
+    if (isUI(fullText)) return 'ui';
+    if (isDB(fullText)) return 'db';
+    if (isInfra(fullText)) return 'infra';
+    if (isBack(fullText)) return 'back';
+    if (isFront(fullText)) return 'front';
+    return 'front'; // Default to front (PM/QA fallback)
+  };
+
+  const getRoleReplacement = (roleStr, category) => {
+    const levelStr = teamLevels[category];
+    const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+    return roleStr.replace(/(junior|mid|senior|intermedio)/i, capitalize(levelStr));
+  };
+
   const modules = rawModules.map(mod => ({
     ...mod,
-    tasks: (mod.tasks || []).map(t => ({
-      ...t,
-      hourlyRate: parseFloat((t.hourlyRate * rateMult).toFixed(2))
-    }))
+    tasks: (mod.tasks || []).map(t => {
+      let role = t.name;
+      let newDescription = t.description;
+      let category = getCategory(role, t.name, mod.name);
+
+      const metaMatch = t.description.match(/\[Meta:{"role":"([^"]+)"/);
+      if (metaMatch) {
+        role = metaMatch[1];
+        category = getCategory(role, t.name, mod.name);
+        const newRole = getRoleReplacement(role, category);
+        newDescription = t.description.replace(`"role":"${role}"`, `"role":"${newRole}"`);
+      }
+
+      const activeMult = SENIORITY_MULTIPLIERS[teamLevels[category]] || 1.00;
+      const rateMult = parseFloat((marketMult * activeMult).toFixed(4));
+      
+      const isFixedCost = t.hours === 0 && t.unitPrice > 0;
+
+      return {
+        ...t,
+        description: newDescription,
+        hourlyRate: isFixedCost ? 0 : parseFloat((t.hourlyRate * rateMult).toFixed(2))
+      };
+    })
   }));
 
   // 2. Ajustes financieros recomendados para este tipo de proyecto
@@ -631,15 +733,24 @@ export const generateHeuristicBudget = async (prompt, budgetId, market = 'peru',
               create: (mod.tasks || []).map((t, idx) => {
                 const hours = t.hours ?? 0;
                 const hourlyRate = t.hourlyRate ?? 0;
-                const total = parseFloat((hours * hourlyRate).toFixed(2));
+                const quantity = t.quantity ?? 1;
+                const unitPrice = t.unitPrice ?? 0;
+                
+                let total = 0;
+                if (hours > 0 && hourlyRate > 0) {
+                  total = parseFloat((hours * hourlyRate).toFixed(2));
+                } else if (unitPrice > 0) {
+                  total = parseFloat((quantity * unitPrice).toFixed(2));
+                }
+
                 return {
                   name: t.name,
                   description: t.description || "",
                   hours,
                   hourlyRate,
-                  quantity: 1,
-                  unitPrice: 0,
-                  total,           // ← CLAVE: calculamos el total aquí
+                  quantity,
+                  unitPrice,
+                  total,
                   orderNumber: idx + 1
                 };
               })
@@ -733,9 +844,9 @@ export const generateHeuristicBudget = async (prompt, budgetId, market = 'peru',
     totalModules:         modules.length,
     market,
     marketLabel:          MARKET_LABELS[market] || market,
-    seniority,
-    seniorityLabel:       SENIORITY_LABELS[seniority] || seniority,
-    rateMult:             parseFloat((MARKET_MULTIPLIERS[market] * SENIORITY_MULTIPLIERS[seniority]).toFixed(4)),
+    team:                 teamLevels,
+    scope,
+    scopeLabel:           SCOPE_LABELS[scope] || scope,
     financialAdjustments: financialAdj,
     modules
   };
