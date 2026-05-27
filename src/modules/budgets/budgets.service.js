@@ -62,8 +62,23 @@ export const createBudget = async (userId, user, data) => {
           client: true,
         },
       },
+      teamMembers: {
+        include: { collaborator: true }
+      }
     },
   });
+
+  // Assign Team Members
+  if (data.team && Array.isArray(data.team) && data.team.length > 0) {
+    await prisma.budgetTeam.createMany({
+      data: data.team.map((t) => ({
+        budgetId: budget.id,
+        collaboratorId: t.collaboratorId,
+        quantity: t.quantity || 1,
+        projectRole: t.projectRole || null,
+      })),
+    });
+  }
 
   // If a template is selected, clone its modules and tasks into this project
   if (data.templateId) {
@@ -126,6 +141,9 @@ export const createBudget = async (userId, user, data) => {
           client: true,
         },
       },
+      teamMembers: {
+        include: { collaborator: true }
+      }
     },
   });
 
@@ -232,6 +250,11 @@ export const getBudgetById = async (user, id, targetCurrency = null) => {
       },
       exports: {
         orderBy: { exportedAt: "desc" },
+      },
+      teamMembers: {
+        include: {
+          collaborator: true,
+        },
       },
     },
   });

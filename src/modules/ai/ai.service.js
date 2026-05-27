@@ -598,16 +598,37 @@ export const generateHeuristicBudget = async (prompt, budgetId, market = 'peru',
   // 1. Clasificar el tipo de proyecto con el modelo local
   const { type, confidence } = classifyProject(prompt);
 
-  // 2. Multiplicadores de mercado y equipo
+  // 2. Fetch Team Members from DB if budgetId is provided
+  let dbTeamMembers = [];
+  if (budgetId) {
+    const budget = await prisma.budget.findUnique({
+      where: { id: budgetId },
+      include: { teamMembers: { include: { collaborator: true } } }
+    });
+    if (budget && budget.teamMembers) {
+      dbTeamMembers = budget.teamMembers;
+    }
+  }
+
+  // 3. Map real team members to categories
+  const teamMapping = { ui: null, front: null, back: null, db: null, infra: null, pm: null, qa: null };
+  dbTeamMembers.forEach(member => {
+    const rolesStr = (member.projectRole || '').toLowerCase();
+    const col = member.collaborator;
+    if (!col) return;
+    const memberData = { name: col.name, rate: parseFloat(col.hourlyRate), role: member.projectRole };
+    
+    if (/(diseñ|ui|ux)/.test(rolesStr)) teamMapping.ui = memberData;
+    if (/(front|móvil|mobile|app|cliente|react)/.test(rolesStr)) teamMapping.front = memberData;
+    if (/(back|api|lógica|node)/.test(rolesStr)) teamMapping.back = memberData;
+    if (/(base de datos|datos|db|sql)/.test(rolesStr)) teamMapping.db = memberData;
+    if (/(infra|devops|despliegue|nube|servidor|aws)/.test(rolesStr)) teamMapping.infra = memberData;
+    if (/(qa|pruebas|tester)/.test(rolesStr)) teamMapping.qa = memberData;
+    if (/(pm|product|project|gestor|scrum)/.test(rolesStr)) teamMapping.pm = memberData;
+  });
+
+  // Multiplicadores de mercado
   const marketMult = MARKET_MULTIPLIERS[market] || 1.00;
-  
-  const teamLevels = {
-    ui: team.ui || 'mid',
-    front: team.front || 'mid',
-    back: team.back || 'mid',
-    db: team.db || 'mid',
-    infra: team.infra || 'mid'
-  };
 
   // 3. Obtener plantillas
   let rawModules = MODULE_TEMPLATES[type] || MODULE_TEMPLATES[PROJECT_TYPES.WEB];
@@ -670,18 +691,15 @@ export const generateHeuristicBudget = async (prompt, budgetId, market = 'peru',
     if (isInfra(fullText)) return 'infra';
     if (isBack(fullText)) return 'back';
     if (isFront(fullText)) return 'front';
-    return 'front'; // Default to front (PM/QA fallback)
+    if (/(pm|project|gestor)/i.test(fullText)) return 'pm';
+    if (/(qa|pruebas|tester)/i.test(fullText)) return 'qa';
+    return 'front'; // Default fallback
   };
 
-  const getRoleReplacement = (roleStr, category) => {
-    const levelStr = teamLevels[category];
-    const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-    return roleStr.replace(/(junior|mid|senior|intermedio)/i, capitalize(levelStr));
-  };
+  const hasAnyTeamMember = Object.values(teamMapping).some(m => m !== null);
 
-  const modules = rawModules.map(mod => ({
-    ...mod,
-    tasks: (mod.tasks || []).map(t => {
+  const modules = rawModules.map(mod => {
+    const filteredTasks = (mod.tasks || []).map(t => {
       let role = t.name;
       let newDescription = t.description;
       let category = getCategory(role, t.name, mod.name);
@@ -690,22 +708,43 @@ export const generateHeuristicBudget = async (prompt, budgetId, market = 'peru',
       if (metaMatch) {
         role = metaMatch[1];
         category = getCategory(role, t.name, mod.name);
-        const newRole = getRoleReplacement(role, category);
-        newDescription = t.description.replace(`"role":"${role}"`, `"role":"${newRole}"`);
       }
 
-      const activeMult = SENIORITY_MULTIPLIERS[teamLevels[category]] || 1.00;
-      const rateMult = parseFloat((marketMult * activeMult).toFixed(4));
+      const mappedMember = teamMapping[category];
+
+      // Filter out tasks if team is defined but no one is assigned to this category
+      if (hasAnyTeamMember && !mappedMember) {
+        return null;
+      }
+
+      let finalRate = parseFloat((t.hourlyRate * marketMult * 1.00).toFixed(2)); // Default to 'Mid' equivalent
+      let finalRole = role;
+
+      if (mappedMember && mappedMember.rate > 0) {
+        finalRate = mappedMember.rate;
+        finalRole = mappedMember.name;
+      } else if (marketMult !== 1.00) {
+        finalRole = `${role} (Mercado)`;
+      }
+
+      if (metaMatch) {
+        newDescription = t.description.replace(`"role":"${role}"`, `"role":"${finalRole}"`);
+      }
       
       const isFixedCost = t.hours === 0 && t.unitPrice > 0;
 
       return {
         ...t,
         description: newDescription,
-        hourlyRate: isFixedCost ? 0 : parseFloat((t.hourlyRate * rateMult).toFixed(2))
+        hourlyRate: isFixedCost ? 0 : finalRate
       };
-    })
-  }));
+    }).filter(t => t !== null);
+
+    return {
+      ...mod,
+      tasks: filteredTasks
+    };
+  }).filter(mod => mod.tasks.length > 0);
 
   // 2. Ajustes financieros recomendados para este tipo de proyecto
   const financialAdj = FINANCIAL_ADJUSTMENTS[type] || { contingency: 10, margin: 20 };
@@ -844,7 +883,13 @@ export const generateHeuristicBudget = async (prompt, budgetId, market = 'peru',
     totalModules:         modules.length,
     market,
     marketLabel:          MARKET_LABELS[market] || market,
-    team:                 teamLevels,
+    team: {
+      ui: teamMapping.ui ? teamMapping.ui.name : (hasAnyTeamMember ? "No Incluido" : "Estándar"),
+      front: teamMapping.front ? teamMapping.front.name : (hasAnyTeamMember ? "No Incluido" : "Estándar"),
+      back: teamMapping.back ? teamMapping.back.name : (hasAnyTeamMember ? "No Incluido" : "Estándar"),
+      db: teamMapping.db ? teamMapping.db.name : (hasAnyTeamMember ? "No Incluido" : "Estándar"),
+      infra: teamMapping.infra ? teamMapping.infra.name : (hasAnyTeamMember ? "No Incluido" : "Estándar")
+    },
     scope,
     scopeLabel:           SCOPE_LABELS[scope] || scope,
     financialAdjustments: financialAdj,

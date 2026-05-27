@@ -84,6 +84,7 @@ model User {
   notifications Notification[]
   subscriptions Subscription[]
   auditLogs     AuditLog[]
+  collaborators Collaborator[]
 
   @@map("users")
 }
@@ -96,6 +97,7 @@ model Company {
   address       String?
   phone         String?
   email         String?
+  website       String?
   logoUrl       String?  @map("logo_url")
   currency      String   @default("PEN")
   taxPercentage Decimal  @default(18.00) @map("tax_percentage")
@@ -263,6 +265,7 @@ model Budget {
   versions      BudgetVersion[]
   exports       BudgetExport[]
   notifications Notification[]
+  teamMembers   BudgetTeam[]
 
   @@map("budgets")
 }
@@ -407,4 +410,33 @@ model AuditLog {
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   @@map("audit_logs")
+}
+
+model Collaborator {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  name        String
+  role        String
+  hourlyRate  Decimal  @default(0) @map("hourly_rate")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  budgetTeams BudgetTeam[]
+
+  @@map("collaborators")
+}
+
+model BudgetTeam {
+  id             String   @id @default(uuid())
+  budgetId       String   @map("budget_id")
+  collaboratorId String   @map("collaborator_id")
+  quantity       Int      @default(1)
+  projectRole    String?  @map("project_role")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  budget         Budget       @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  collaborator   Collaborator @relation(fields: [collaboratorId], references: [id], onDelete: Cascade)
+
+  @@map("budget_teams")
 }
