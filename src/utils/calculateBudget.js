@@ -1,3 +1,16 @@
+export const parseDurationToMonths = (durationStr) => {
+  if (!durationStr) return 1;
+  const str = durationStr.toLowerCase();
+  if (str.includes('año') || str.includes('ano')) {
+      return 12; 
+  }
+  const match = str.match(/(\d+)\s*mes/);
+  if (match) {
+      return parseInt(match[1], 10);
+  }
+  return 1;
+};
+
 /**
  * Calculate the total cost for a single task.
  * If hours is set, we use hours * hourlyRate * quantity.
@@ -43,14 +56,15 @@ export const calculateBudgetTotals = ({
   marginPercentage = 0,
   taxPercentage = 0,
   discountPercentage = 0,
+  durationMultiplier = 1,
 }) => {
   let subtotal = 0;
   const modulesWithTotals = modules.map((mod) => {
     const tasks = mod.tasks || [];
     const dependencies = mod.dependencies || [];
 
-    const tasksSum = tasks.reduce((sum, task) => sum + calculateTaskTotal(task), 0);
-    const dependenciesSum = dependencies.reduce((sum, dep) => sum + calculateDependencyCost(dep), 0);
+    const tasksSum = tasks.reduce((sum, task) => sum + (calculateTaskTotal(task) * durationMultiplier), 0);
+    const dependenciesSum = dependencies.reduce((sum, dep) => sum + (calculateDependencyCost(dep) * durationMultiplier), 0);
     const modSubtotal = tasksSum + dependenciesSum;
 
     subtotal += modSubtotal;

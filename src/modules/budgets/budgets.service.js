@@ -1,5 +1,5 @@
 import prisma from "../../config/prisma.js";
-import { calculateBudgetTotals } from "../../utils/calculateBudget.js";
+import { calculateBudgetTotals, parseDurationToMonths } from "../../utils/calculateBudget.js";
 import { generateBudgetCode } from "../../utils/generateBudgetCode.js";
 import { getIO } from "../../sockets/socket.js";
 import { checkProjectAccess } from "../projects/projects.service.js";
@@ -352,6 +352,15 @@ export const updateBudget = async (user, id, data) => {
     },
   });
 
+  if (data.estimatedDuration !== undefined) {
+    await prisma.project.update({
+      where: { id: existingBudget.projectId },
+      data: { estimatedDuration: data.estimatedDuration }
+    });
+    // Refresh to get updated project
+    updatedBudget.project.estimatedDuration = data.estimatedDuration;
+  }
+
   // Recalculate totals
   await calculateBudget(user, id);
 
@@ -437,12 +446,15 @@ export const calculateBudget = async (user, id) => {
   }
 
   // Calculate totals
+  const durationMultiplier = parseDurationToMonths(budget.project.estimatedDuration);
+
   const totals = calculateBudgetTotals({
     modules: modulesCopy,
     contingencyPercentage: budget.contingencyPercentage,
     marginPercentage: budget.marginPercentage,
     taxPercentage: budget.taxPercentage,
     discountPercentage: budget.discountPercentage,
+    durationMultiplier,
   });
 
   // Update modules' subtotal in the DB too
