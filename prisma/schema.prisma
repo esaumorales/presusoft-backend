@@ -140,6 +140,7 @@ model Project {
   status                String     @default("active")
   contingencyPercentage Decimal    @default(0) @map("contingency_percentage")
   marginPercentage      Decimal    @default(0) @map("margin_percentage")
+  estimatedDuration     String?    @map("estimated_duration")
   createdAt             DateTime   @default(now()) @map("created_at")
   updatedAt             DateTime   @updatedAt @map("updated_at")
 

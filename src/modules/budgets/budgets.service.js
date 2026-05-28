@@ -17,6 +17,7 @@ export const createBudget = async (userId, user, data) => {
         clientId: data.clientId || null,
         name: data.title || "Proyecto sin nombre",
         description: data.description || "",
+        estimatedDuration: data.estimatedDuration || null,
         status: "active",
       },
     });
