@@ -11,8 +11,8 @@ const options = {
     },
     servers: [
       {
-        url: "http://localhost:4000/api",
-        description: "Servidor local",
+        url: process.env.RENDER_EXTERNAL_URL ? `${process.env.RENDER_EXTERNAL_URL}/api` : "http://localhost:4000/api",
+        description: process.env.RENDER_EXTERNAL_URL ? "Servidor de Producción (Render)" : "Servidor local",
       },
     ],
     components: {
