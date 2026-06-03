@@ -9,7 +9,8 @@ RUN apk update && apk add --no-cache \
     ca-certificates \
     ttf-freefont \
     nodejs \
-    yarn
+    yarn \
+    openssl
 
 # Configurar variables de entorno para que Puppeteer use el Chromium que acabamos de instalar
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
