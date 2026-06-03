@@ -11,6 +11,25 @@ const router = Router();
  *     summary: Registrar nuevo usuario
  *     tags:
  *       - Auth
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - email
+ *               - password
+ *             properties:
+ *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               phone:
+ *                 type: string
  */
 router.post("/register", register);
 
@@ -21,6 +40,20 @@ router.post("/register", register);
  *     summary: Iniciar sesión
  *     tags:
  *       - Auth
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
  */
 router.post("/login", login);
 
