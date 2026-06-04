@@ -44,6 +44,7 @@ export const createModule = async (user, projectId, data) => {
       name: data.name,
       description: data.description,
       orderNumber: data.orderNumber || 1,
+      isExtra: data.isExtra || false,
     },
   });
 
@@ -62,6 +63,7 @@ export const updateModule = async (user, id, data) => {
       name: data.name !== undefined ? data.name : moduleItem.name,
       description: data.description !== undefined ? data.description : moduleItem.description,
       orderNumber: data.orderNumber !== undefined ? data.orderNumber : moduleItem.orderNumber,
+      isExtra: data.isExtra !== undefined ? data.isExtra : moduleItem.isExtra,
     },
   });
 

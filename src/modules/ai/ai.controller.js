@@ -8,8 +8,8 @@ export const generateBudgetModel = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "El prompt es requerido" });
     }
 
-    // Call the heuristic service with market + scope + team
-    const generatedData = await generateHeuristicBudget(prompt, budgetId, market || 'peru', scope || 'full', team || {});
+    // Call the heuristic service with market + scope + team + user
+    const generatedData = await generateHeuristicBudget(prompt, budgetId, market || 'peru', scope || 'full', team || {}, req.user);
 
     res.json({
       success: true,

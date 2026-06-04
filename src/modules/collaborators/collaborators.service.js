@@ -8,6 +8,7 @@ export const createCollaborator = async (userId, data) => {
       name: data.name,
       role: data.role,
       hourlyRate: data.hourlyRate || 0,
+      currency: data.currency || "USD",
     },
   });
 
@@ -40,6 +41,7 @@ export const updateCollaborator = async (userId, id, data) => {
       name: data.name !== undefined ? data.name : existing.name,
       role: data.role !== undefined ? data.role : existing.role,
       hourlyRate: data.hourlyRate !== undefined ? data.hourlyRate : existing.hourlyRate,
+      currency: data.currency !== undefined ? data.currency : existing.currency,
     },
   });
 

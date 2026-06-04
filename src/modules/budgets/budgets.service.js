@@ -71,14 +71,25 @@ export const createBudget = async (userId, user, data) => {
 
   // Assign Team Members
   if (data.team && Array.isArray(data.team) && data.team.length > 0) {
-    await prisma.budgetTeam.createMany({
-      data: data.team.map((t) => ({
-        budgetId: budget.id,
-        collaboratorId: t.collaboratorId,
-        quantity: t.quantity || 1,
-        projectRole: t.projectRole || null,
-      })),
-    });
+    const teamData = [];
+    for (const t of data.team) {
+      const coll = await prisma.collaborator.findUnique({ where: { id: t.collaboratorId } });
+      if (coll) {
+        teamData.push({
+          budgetId: budget.id,
+          collaboratorId: t.collaboratorId,
+          quantity: t.quantity || 1,
+          projectRole: t.projectRole || null,
+          hourlyRate: coll.hourlyRate,
+          currency: coll.currency || "USD",
+        });
+      }
+    }
+    if (teamData.length > 0) {
+      await prisma.budgetTeam.createMany({
+        data: teamData,
+      });
+    }
   }
 
   // If a template is selected, clone its modules and tasks into this project
@@ -302,8 +313,27 @@ export const getBudgetById = async (user, id, targetCurrency = null) => {
         }
         dep.cost = await convertAmount(dep.cost, "USD", target);
       }
+      for (const tm of budget.teamMembers) {
+        if (tm.currency !== target) {
+          tm.hourlyRate = await convertAmount(tm.hourlyRate, tm.currency, target);
+          tm.currency = target;
+        }
+      }
     }
   }
+
+  // Precalculate baseTeamCost for the frontend using the correct currency
+  const durationMultiplier = parseDurationToMonths(budget.project.estimatedDuration);
+  let baseTeamCost = 0;
+  for (const tm of budget.teamMembers) {
+    let rate = Number(tm.hourlyRate) || 0;
+    if (!targetCurrency && tm.currency !== budget.currency) {
+      rate = await convertAmount(rate, tm.currency, budget.currency);
+    }
+    const qty = Number(tm.quantity) || 1;
+    baseTeamCost += rate * 160 * qty * durationMultiplier;
+  }
+  budget.baseTeamCost = Math.round(baseTeamCost * 100) / 100;
 
   return budget;
 };
@@ -336,6 +366,7 @@ export const updateBudget = async (user, id, data) => {
       currency: data.currency !== undefined ? data.currency : existingBudget.currency,
       contingencyPercentage: data.contingencyPercentage !== undefined ? data.contingencyPercentage : existingBudget.contingencyPercentage,
       marginPercentage: data.marginPercentage !== undefined ? data.marginPercentage : existingBudget.marginPercentage,
+      urgencyPercentage: data.urgencyPercentage !== undefined ? data.urgencyPercentage : existingBudget.urgencyPercentage,
       taxPercentage: data.taxPercentage !== undefined ? data.taxPercentage : existingBudget.taxPercentage,
       discountPercentage: data.discountPercentage !== undefined ? data.discountPercentage : existingBudget.discountPercentage,
       validityDays: data.validityDays !== undefined ? data.validityDays : existingBudget.validityDays,
@@ -416,6 +447,7 @@ export const calculateBudget = async (user, id) => {
           },
         },
       },
+      teamMembers: true,
     },
   });
 
@@ -448,10 +480,21 @@ export const calculateBudget = async (user, id) => {
   // Calculate totals
   const durationMultiplier = parseDurationToMonths(budget.project.estimatedDuration);
 
+  // Convert team members rates if needed
+  const teamMembersCopy = JSON.parse(JSON.stringify(budget.teamMembers || []));
+  for (const tm of teamMembersCopy) {
+    if (tm.currency !== budget.currency) {
+      tm.hourlyRate = await convertAmount(tm.hourlyRate, tm.currency, budget.currency);
+      tm.currency = budget.currency;
+    }
+  }
+
   const totals = calculateBudgetTotals({
     modules: modulesCopy,
+    teamMembers: teamMembersCopy,
     contingencyPercentage: budget.contingencyPercentage,
     marginPercentage: budget.marginPercentage,
+    urgencyPercentage: budget.urgencyPercentage,
     taxPercentage: budget.taxPercentage,
     discountPercentage: budget.discountPercentage,
     durationMultiplier,
@@ -471,6 +514,7 @@ export const calculateBudget = async (user, id) => {
       subtotal: totals.subtotal,
       contingencyAmount: totals.contingencyAmount,
       marginAmount: totals.marginAmount,
+      urgencyAmount: totals.urgencyAmount,
       taxAmount: totals.taxAmount,
       discountAmount: totals.discountAmount,
       total: totals.total,

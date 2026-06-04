@@ -47,40 +47,74 @@ export const calculateDependencyCost = (dependency) => {
  * 4. marginAmount = subtotal_proyecto * marginPercentage
  * 5. subtotal_base = subtotal_proyecto + contingencyAmount + marginAmount
  * 6. taxAmount = subtotal_base * taxPercentage
- * 7. discountAmount = subtotal_base * discountPercentage
- * 8. total = subtotal_base + taxAmount - discountAmount
+ * 5. urgencyAmount = subtotal_proyecto * urgencyPercentage
+ * 6. subtotal_base = subtotal_proyecto + contingencyAmount + marginAmount + urgencyAmount
+ * 7. taxAmount = subtotal_base * taxPercentage
+ * 8. discountAmount = subtotal_base * discountPercentage
+ * 9. total = subtotal_base + taxAmount - discountAmount
  */
 export const calculateBudgetTotals = ({
   modules = [],
+  teamMembers = [],
   contingencyPercentage = 0,
   marginPercentage = 0,
+  urgencyPercentage = 0,
   taxPercentage = 0,
   discountPercentage = 0,
   durationMultiplier = 1,
 }) => {
   let subtotal = 0;
+  
+  // Calculate Base Team Cost
+  const baseTeamCost = teamMembers.reduce((sum, tm) => {
+    const hourly = Number(tm.hourlyRate) || 0;
+    const qty = Number(tm.quantity) || 1;
+    const monthlyCost = hourly * 160 * qty;
+    return sum + (monthlyCost * durationMultiplier);
+  }, 0);
+  
+  subtotal += baseTeamCost;
+
   const modulesWithTotals = modules.map((mod) => {
     const tasks = mod.tasks || [];
     const dependencies = mod.dependencies || [];
 
-    const tasksSum = tasks.reduce((sum, task) => sum + (calculateTaskTotal(task) * durationMultiplier), 0);
-    const dependenciesSum = dependencies.reduce((sum, dep) => sum + (calculateDependencyCost(dep) * durationMultiplier), 0);
-    const modSubtotal = tasksSum + dependenciesSum;
+    const tasksHourlySum = tasks.reduce((sum, task) => {
+      if (Number(task.hours) > 0) return sum + (Number(task.hours) * Number(task.hourlyRate) * (Number(task.quantity) || 1) * durationMultiplier);
+      return sum;
+    }, 0);
 
-    subtotal += modSubtotal;
+    const tasksFixedSum = tasks.reduce((sum, task) => {
+      if (!(Number(task.hours) > 0)) return sum + (Number(task.unitPrice) * (Number(task.quantity) || 1) * durationMultiplier);
+      return sum;
+    }, 0);
+
+    const tasksSum = tasksHourlySum + tasksFixedSum;
+    const dependenciesSum = dependencies.reduce((sum, dep) => sum + (calculateDependencyCost(dep) * durationMultiplier), 0);
+    
+    // Solo las horas de módulos extra suman al presupuesto general.
+    // Los costos fijos (unitPrice) y dependencias se suman siempre.
+    const globalSubtotalAddition = (mod.isExtra ? tasksHourlySum : 0) + tasksFixedSum + dependenciesSum;
+    subtotal += globalSubtotalAddition;
+
+    // Para la vista (UI), queremos mostrar el valor de TODAS las tareas, aunque no se sume al total
+    const displaySubtotal = tasksSum + dependenciesSum;
 
     return {
       ...mod,
-      subtotal: modSubtotal,
+      subtotal: displaySubtotal,
       tasksSum,
       dependenciesSum,
     };
   });
 
-  const contingencyAmount = subtotal * (Number(contingencyPercentage) || 0) / 100;
-  const marginAmount = subtotal * (Number(marginPercentage) || 0) / 100;
+  const contingencyAmount = Number((subtotal * (Number(contingencyPercentage) / 100)).toFixed(2));
+  const marginAmount = Number((subtotal * (Number(marginPercentage) / 100)).toFixed(2));
   
-  const subtotalBase = subtotal + contingencyAmount + marginAmount;
+  const monthlyCost = durationMultiplier > 0 ? (subtotal / durationMultiplier) : subtotal;
+  const urgencyAmount = Number((monthlyCost * Number(urgencyPercentage)).toFixed(2));
+  
+  const subtotalBase = subtotal + contingencyAmount + marginAmount + urgencyAmount;
 
   const taxAmount = subtotalBase * (Number(taxPercentage) || 0) / 100;
   const discountAmount = subtotalBase * (Number(discountPercentage) || 0) / 100;
@@ -89,6 +123,7 @@ export const calculateBudgetTotals = ({
 
   return {
     modules: modulesWithTotals,
+    baseTeamCost: Math.round(baseTeamCost * 100) / 100,
     subtotal: Math.round(subtotal * 100) / 100,
     contingencyAmount: Math.round(contingencyAmount * 100) / 100,
     marginAmount: Math.round(marginAmount * 100) / 100,

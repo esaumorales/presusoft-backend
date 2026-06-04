@@ -594,19 +594,26 @@ const SCOPE_LABELS = {
 // ─────────────────────────────────────────────────────────────────────────────
 // FUNCIÓN PRINCIPAL: GENERAR PRESUPUESTO
 // ─────────────────────────────────────────────────────────────────────────────
-export const generateHeuristicBudget = async (prompt, budgetId, market = 'peru', scope = 'full', team = {}) => {
+export const generateHeuristicBudget = async (prompt, budgetId, market = 'peru', scope = 'full', team = {}, user = null) => {
   // 1. Clasificar el tipo de proyecto con el modelo local
   const { type, confidence } = classifyProject(prompt);
 
-  // 2. Fetch Team Members from DB if budgetId is provided
+  // 2. Fetch Team Members and Project Duration from DB if budgetId is provided
   let dbTeamMembers = [];
+  let budgetDurationMonths = 1;
   if (budgetId) {
     const budget = await prisma.budget.findUnique({
       where: { id: budgetId },
-      include: { teamMembers: { include: { collaborator: true } } }
+      include: { 
+        teamMembers: { include: { collaborator: true } },
+        project: true
+      }
     });
     if (budget && budget.teamMembers) {
       dbTeamMembers = budget.teamMembers;
+    }
+    if (budget && budget.project && budget.project.estimatedDuration) {
+      budgetDurationMonths = parseInt(budget.project.estimatedDuration) || 1;
     }
   }
 
@@ -631,7 +638,40 @@ export const generateHeuristicBudget = async (prompt, budgetId, market = 'peru',
   const marketMult = MARKET_MULTIPLIERS[market] || 1.00;
 
   // 3. Obtener plantillas
-  let rawModules = MODULE_TEMPLATES[type] || MODULE_TEMPLATES[PROJECT_TYPES.WEB];
+  let rawModules = JSON.parse(JSON.stringify(MODULE_TEMPLATES[type] || MODULE_TEMPLATES[PROJECT_TYPES.WEB]));
+
+  // 3.5 Extraer tecnologías mencionadas en el prompt para enriquecer las descripciones
+  const knownTechsRegex = /(react native|next\.js|node\.js|tailwind|bootstrap|react|vue|angular|svelte|express|nestjs|php|laravel|python|django|flask|ruby|rails|java|spring|golang|mysql|postgresql|mongodb|firebase|supabase|aws|azure|docker|kubernetes|vercel|netlify|strapi|wordpress|figma|graphql|typescript|javascript|flutter|swift|kotlin)/ig;
+  const foundTechsMatch = prompt.match(knownTechsRegex);
+  let techString = "";
+  
+  if (foundTechsMatch) {
+    const uniqueTechs = [...new Set(foundTechsMatch.map(t => {
+      if(t.toLowerCase() === 'next.js') return 'Next.js';
+      if(t.toLowerCase() === 'node.js') return 'Node.js';
+      if(t.toLowerCase() === 'react native') return 'React Native';
+      return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+    }))];
+    if (uniqueTechs.length > 0) {
+      techString = uniqueTechs.join(', ');
+    }
+  }
+
+  // Inyectar el stack en las descripciones (si no hay custom, inyectar defaults por industria)
+  rawModules.forEach(m => {
+    let finalStack = techString;
+    if (/(frontend|vistas|cliente|tienda|móvil)/i.test(m.name)) {
+      if (!finalStack) finalStack = type === 'MOBILE' ? "React Native, Expo, Firebase" : "React.js, TailwindCSS, Vercel";
+      m.description = `${m.description}\n🎯 Stack Sugerido: ${finalStack}`;
+    }
+    if (/(backend|datos|api|servidor)/i.test(m.name)) {
+      if (!finalStack) finalStack = "Node.js (Express), PostgreSQL, AWS";
+      m.description = `${m.description}\n🎯 Stack Sugerido: ${finalStack}`;
+    }
+    if (/(ui|ux|diseño)/i.test(m.name)) {
+      m.description = `${m.description}\n🎯 Herramientas: Figma, FigJam`;
+    }
+  });
 
   // 4. Filtrar módulos según el alcance seleccionado
   if (scope === 'frontend') {
@@ -678,11 +718,11 @@ export const generateHeuristicBudget = async (prompt, budgetId, market = 'peru',
   // 5. Aplicar multiplicador dinámico y ajustar "Role" en el meta
   
   // Helpers para identificar categoría de la tarea
-  const isUI = (str) => /(diseñ|ui|ux|figma|wireframe|prototipo|visual)/i.test(str);
-  const isFront = (str) => /(front|móvil|mobile|app|cliente|maquetación|react|vista)/i.test(str);
-  const isDB = (str) => /(base de datos|datos|db|sql|modelo|prisma|mongo)/i.test(str);
+  const isUI = (str) => /(diseñ|\bui\b|\bux\b|figma|wireframe|prototipo|visual)/i.test(str);
+  const isFront = (str) => /(frontend|front\b|móvil|mobile|\bapp\b|cliente|maquetación|react|vista)/i.test(str);
+  const isDB = (str) => /(base de datos|datos|\bdb\b|sql|modelo|prisma|mongo)/i.test(str);
   const isInfra = (str) => /(infra|devops|despliegue|nube|hosting|ssl|cdn|servidor|aws|vercel)/i.test(str);
-  const isBack = (str) => /(back|api|lógica|controlador|ruta|auth)/i.test(str);
+  const isBack = (str) => /(backend|back\b|\bapi\b|lógica|controlador|rutas?|auth)/i.test(str);
 
   const getCategory = (role, taskName, modName) => {
     const fullText = `${role} ${taskName} ${modName}`;
@@ -698,13 +738,25 @@ export const generateHeuristicBudget = async (prompt, budgetId, market = 'peru',
 
   const hasAnyTeamMember = Object.values(teamMapping).some(m => m !== null);
 
+  const GROUP_TITLES = {
+    ui: "Diseño UI/UX y Experiencia",
+    front: "Arquitectura Frontend y Vistas",
+    back: "Arquitectura Backend y API",
+    db: "Arquitectura de Base de Datos",
+    infra: "Infraestructura, DevOps y Nube",
+    qa: "Pruebas de Calidad (QA)",
+    pm: "Gestión y Planificación",
+  };
+
   const modules = rawModules.map(mod => {
-    const filteredTasks = (mod.tasks || []).map(t => {
+    const filteredTasks = [];
+
+    (mod.tasks || []).forEach(t => {
       let role = t.name;
-      let newDescription = t.description;
+      let newDescription = t.description || "";
       let category = getCategory(role, t.name, mod.name);
 
-      const metaMatch = t.description.match(/\[Meta:{"role":"([^"]+)"/);
+      const metaMatch = newDescription.match(/\[Meta:{"role":"([^"]+)"/);
       if (metaMatch) {
         role = metaMatch[1];
         category = getCategory(role, t.name, mod.name);
@@ -714,10 +766,10 @@ export const generateHeuristicBudget = async (prompt, budgetId, market = 'peru',
 
       // Filter out tasks if team is defined but no one is assigned to this category
       if (hasAnyTeamMember && !mappedMember) {
-        return null;
+        return;
       }
 
-      let finalRate = parseFloat((t.hourlyRate * marketMult * 1.00).toFixed(2)); // Default to 'Mid' equivalent
+      let finalRate = parseFloat((t.hourlyRate * marketMult * 1.00).toFixed(2));
       let finalRole = role;
 
       if (mappedMember && mappedMember.rate > 0) {
@@ -727,18 +779,23 @@ export const generateHeuristicBudget = async (prompt, budgetId, market = 'peru',
         finalRole = `${role} (Mercado)`;
       }
 
-      if (metaMatch) {
-        newDescription = t.description.replace(`"role":"${role}"`, `"role":"${finalRole}"`);
-      }
-      
-      const isFixedCost = t.hours === 0 && t.unitPrice > 0;
+      let scaledHours = t.hours || 0;
 
-      return {
-        ...t,
+      if (metaMatch) {
+        newDescription = newDescription.replace(`"role":"${metaMatch[1]}"`, `"role":"${finalRole}"`);
+      } else {
+        newDescription = `[Meta:{"role":"${finalRole}"}] ${newDescription}`;
+      }
+
+      filteredTasks.push({
+        name: t.name,
         description: newDescription,
-        hourlyRate: isFixedCost ? 0 : finalRate
-      };
-    }).filter(t => t !== null);
+        hours: scaledHours,
+        hourlyRate: finalRate,
+        quantity: t.quantity || 1,
+        unitPrice: t.unitPrice || 0
+      });
+    });
 
     return {
       ...mod,
@@ -816,64 +873,8 @@ export const generateHeuristicBudget = async (prompt, budgetId, market = 'peru',
       });
 
       // ─── Recalcular totales del presupuesto ────────────────────────────────
-      // Obtenemos todos los módulos con sus tareas y dependencias actualizadas
-      const freshBudget = await prisma.budget.findUnique({
-        where: { id: budgetId },
-        include: {
-          project: {
-            include: {
-              modules: {
-                include: {
-                  tasks: true,
-                  dependencies: { include: { plan: true } }
-                }
-              }
-            }
-          }
-        }
-      });
-
-      if (freshBudget) {
-        let grandSubtotal = 0;
-
-        // Calcular subtotal de cada módulo y actualizar en BD
-        for (const module of freshBudget.project.modules) {
-          const taskTotal = module.tasks.reduce(
-            (sum, t) => sum + parseFloat(t.total || 0), 0
-          );
-          const depTotal = module.dependencies.reduce(
-            (sum, d) => sum + parseFloat(d.cost || 0), 0
-          );
-          const moduleSubtotal = parseFloat((taskTotal + depTotal).toFixed(2));
-
-          await prisma.module.update({
-            where: { id: module.id },
-            data: { subtotal: moduleSubtotal }
-          });
-
-          grandSubtotal += moduleSubtotal;
-        }
-
-        // Calcular montos financieros
-        const contingencyAmount  = parseFloat((grandSubtotal * financialAdj.contingency  / 100).toFixed(2));
-        const marginAmount       = parseFloat((grandSubtotal * financialAdj.margin       / 100).toFixed(2));
-        const taxBase            = grandSubtotal + contingencyAmount + marginAmount;
-        const taxAmount          = parseFloat((taxBase * parseFloat(freshBudget.taxPercentage) / 100).toFixed(2));
-        const discountAmount     = parseFloat((taxBase * parseFloat(freshBudget.discountPercentage) / 100).toFixed(2));
-        const total              = parseFloat((taxBase + taxAmount - discountAmount).toFixed(2));
-
-        await prisma.budget.update({
-          where: { id: budgetId },
-          data: {
-            subtotal:             grandSubtotal,
-            contingencyAmount,
-            marginAmount,
-            taxAmount,
-            discountAmount,
-            total,
-          }
-        });
-      }
+      const { calculateBudget } = await import('../budgets/budgets.service.js');
+      await calculateBudget(user, budgetId);
     }
   }
 
@@ -896,4 +897,3 @@ export const generateHeuristicBudget = async (prompt, budgetId, market = 'peru',
     modules
   };
 };
-
